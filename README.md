@@ -10,20 +10,20 @@ pi-dash gives you a unified view of all your pi sessions — running, waiting, f
 
 ```
 pi-dash  │ 3 running │ 2 waiting │ 12 done │ 1 failed │        ? help
-─────────────────────────────────────────────────────────────────────────
- ▶ pi -p        #a3f2 2m14s  ~/code         Fix the auth bug in log...
- ● active       #c8b1 45s    ~/api          Add rate limiting to...
- ◉ waiting      #d4e2 3m01s  ~/code         Refactor the database...
->✓ done         #b1c4 1m02s  ~/code         Add unit tests for...
- ✗ failed       #e7d9 3m30s  ~/api          Deploy the hotfix...
- ◼ killed       #f0a1 0m12s  ~/code         Refactor database...
-─────────────────────────────────────────────────────────────────────────
+  STATUS         ID    AGE      DIRECTORY              LAST TOOL                TASK
+  ▶ pi -p        #a3f2 4s       ~/code                 bash 3m02s               Fix the auth bug in log...
+  ● active       #c8b1 2s       ~/api                  read 1s                  Add rate limiting to...
+  ◉ waiting      #d4e2 35s      ~/code                 bash                     Refactor the database...
+> ✓ done         #b1c4 12m      ~/code                 bash                     Add unit tests for...
+  ✗ failed       #e7d9 45m      ~/api                  bash                     Deploy the hotfix...
+  ◼ killed       #f0a1 2h03m    ~/code                 bash                     Refactor database...
+──────────────────────────────────────────────────────────────────────────────────────────────────────
  Session #b1c4 — Done (1m 02s)
  Model: claude-sonnet-4-5 (anthropic)
  CWD: /Users/john/code
  Prompt: "Add unit tests for the auth module"
  Turns: 5 │ Tokens: 18,200 in / 4,100 out │ Cost: $0.06
- Last tool: bash `npm test`
+ Last tool: bash npm test
 ```
 
 ### Session statuses
@@ -36,6 +36,17 @@ pi-dash  │ 3 running │ 2 waiting │ 12 done │ 1 failed │        ? help
 | `✓` | done | Completed successfully |
 | `✗` | failed | Ended with error |
 | `◼` | killed | Process died without clean exit |
+
+### Columns
+
+| Column | Description |
+|--------|-------------|
+| STATUS | Session status icon and label |
+| ID | Short session ID (first 4 chars) |
+| AGE | Time since the session file was last written to (ticks live) |
+| DIRECTORY | Working directory of the session |
+| LAST TOOL | Last tool called, with elapsed time if still running |
+| TASK | Session name, last user message, or initial prompt |
 
 ### Keybindings
 

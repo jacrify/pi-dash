@@ -2,6 +2,7 @@
 
 import React, { useRef } from "react";
 import { Box, Text, useStdout } from "ink";
+import { statSync } from "node:fs";
 import type { TrackedSession, SessionStatus } from "../types.js";
 import { isAlive } from "../types.js";
 
@@ -62,16 +63,30 @@ export function SessionList({ sessions, selectedIndex, maxHeight }: SessionListP
     );
   }
 
-  // Calculate visible window, reserving lines for scroll indicators
+  // Calculate visible window, reserving lines for header + scroll indicators
   const hasMoreAbove = scrollTop > 0;
   const hasMoreBelow = (scrollTop + availableHeight) < sessions.length;
-  const indicatorLines = (hasMoreAbove ? 1 : 0) + (hasMoreBelow ? 1 : 0);
+  const indicatorLines = 1 + (hasMoreAbove ? 1 : 0) + (hasMoreBelow ? 1 : 0); // +1 for header
   const sessionSlots = Math.max(1, availableHeight - indicatorLines);
   const visibleEnd = Math.min(scrollTop + sessionSlots, sessions.length);
   const visibleSessions = sessions.slice(scrollTop, visibleEnd);
 
+  // Column header
+  const header = (
+    <Text wrap="truncate" bold color="cyan">
+      {"  "}
+      {"STATUS".padEnd(15)}
+      {"ID".padEnd(6)}
+      {"AGE".padEnd(9)}
+      {"DIRECTORY".padEnd(cwdWidth + 1)}
+      {"LAST TOOL".padEnd(toolColWidth + 1)}
+      {"TASK"}
+    </Text>
+  );
+
   return (
     <Box flexDirection="column" paddingX={1} height={availableHeight}>
+      {header}
       {hasMoreAbove && (
         <Text dimColor>  ↑ {scrollTop} more above</Text>
       )}
@@ -113,10 +128,12 @@ function shortenCwd(cwd: string): string {
 }
 
 function formatDuration(session: TrackedSession): string {
-  const ms = session.pid
-    ? Date.now() - session.startedAt.getTime()
-    : session.duration ?? 0;
-
+  let ms: number;
+  try {
+    ms = Date.now() - statSync(session.sessionFile).mtimeMs;
+  } catch {
+    ms = 0;
+  }
   return formatMs(ms);
 }
 

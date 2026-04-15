@@ -3,6 +3,14 @@
 import { openSync, readSync, closeSync, readdirSync, statSync, watch } from "node:fs";
 import { join } from "node:path";
 import { homedir } from "node:os";
+
+function aLastActivity(s: TrackedSession): number {
+  try {
+    return statSync(s.sessionFile).mtimeMs;
+  } catch {
+    return s.startedAt.getTime();
+  }
+}
 import { parseSessionFile, parseTail } from "./session-parser.js";
 import { findPiProcesses, matchProcessesToSessions, isProcessAlive } from "./process-manager.js";
 import type { TrackedSession, FilterMode, SortMode, SessionStatus } from "./types.js";
@@ -83,8 +91,11 @@ export class SessionTracker {
 
     list.sort((a, b) => {
       switch (sort) {
-        case "newest":
-          return b.startedAt.getTime() - a.startedAt.getTime();
+        case "newest": {
+          const aTime = aLastActivity(a);
+          const bTime = aLastActivity(b);
+          return bTime - aTime;
+        }
         case "status": {
           const order: Record<SessionStatus, number> = {
             "running": 0,
