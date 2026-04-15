@@ -24,6 +24,7 @@ export function HelpOverlay() {
       <Box flexDirection="column" paddingLeft={2}>
         <Text><Text color="yellow">↑/k ↓/j</Text>  Move selection</Text>
         <Text><Text color="yellow">Enter/p</Text>   Peek — view session event log</Text>
+        <Text><Text color="yellow">R</Text>         Resume — open session in pi</Text>
         <Text><Text color="yellow">K</Text>         Kill — SIGTERM running session</Text>
         <Text><Text color="yellow">!</Text>         Force kill — SIGKILL</Text>
         <Text><Text color="yellow">/</Text>         Search — filter sessions by log content</Text>

@@ -3,6 +3,7 @@
 
 import React from "react";
 import { render } from "ink";
+import { spawnSync } from "node:child_process";
 import { App } from "./tui/app.js";
 import { SessionTracker } from "./session-tracker.js";
 
@@ -123,9 +124,32 @@ if (jsonMode || listMode) {
   process.on("SIGINT", () => { cleanup(); process.exit(0); });
   process.on("SIGTERM", () => { cleanup(); process.exit(0); });
 
-  const inkInstance = render(React.createElement(App, { tracker }));
-  inkInstance.waitUntilExit().then(() => {
-    cleanup();
-    process.exit(0);
-  });
+  let inkInstance: ReturnType<typeof render>;
+
+  const startTui = () => {
+    process.stdout.write(enterAltScreen);
+    inkInstance = render(React.createElement(App, { tracker, onResume: handleResume }));
+    inkInstance.waitUntilExit().then(() => {
+      cleanup();
+      process.exit(0);
+    });
+  };
+
+  const handleResume = (sessionFile: string) => {
+    // Suspend TUI
+    inkInstance.unmount();
+    process.stdout.write(leaveAltScreen);
+
+    // Spawn pi with the session file, inheriting stdio
+    spawnSync("pi", ["--session", sessionFile], {
+      stdio: "inherit",
+      env: process.env,
+    });
+
+    // Restore TUI
+    tracker.refresh();
+    startTui();
+  };
+
+  startTui();
 }

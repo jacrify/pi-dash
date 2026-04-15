@@ -13,6 +13,7 @@ import type { TrackedSession, FilterMode, SortMode, AppState } from "../types.js
 
 interface AppProps {
   tracker: SessionTracker;
+  onResume?: (sessionFile: string) => void;
 }
 
 const SORT_MODES: SortMode[] = ["newest", "status", "cwd", "cost"];
@@ -36,7 +37,7 @@ function resolveSelectedIndex(
   return Math.min(prevIndex, sessions.length - 1);
 }
 
-export function App({ tracker }: AppProps) {
+export function App({ tracker, onResume }: AppProps) {
   const { exit } = useApp();
   const [state, setState] = useState<AppState>({
     sessions: [],
@@ -68,10 +69,12 @@ export function App({ tracker }: AppProps) {
     }
 
     const newIndex = resolveSelectedIndex(sessions, selectedSessionId, selectedIndex);
+    const newSelectedId = sessions[newIndex]?.sessionId ?? selectedSessionId;
     setState((prev) => ({
       ...prev,
       sessions,
       selectedIndex: newIndex,
+      selectedSessionId: newSelectedId,
     }));
   };
 
@@ -219,6 +222,8 @@ export function App({ tracker }: AppProps) {
         const idx = SORT_MODES.indexOf(prev.sort);
         return { ...prev, sort: SORT_MODES[(idx + 1) % SORT_MODES.length]! };
       });
+    } else if (input === "R" && selected && onResume && !selected.pid) {
+      onResume(selected.sessionFile);
     } else if (input === "r") {
       tracker.refresh();
     }
