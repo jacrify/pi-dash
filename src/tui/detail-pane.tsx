@@ -1,7 +1,7 @@
 // Detail pane — shows full info for selected session (fixed height)
 
 import React from "react";
-import { Text } from "ink";
+import { Text, useStdout } from "ink";
 import type { TrackedSession, SessionStatus } from "../types.js";
 
 interface DetailPaneProps {
@@ -35,6 +35,8 @@ const STATUS_LABELS: Record<SessionStatus, string> = {
  * then draw a top border, content, and bottom border.
  */
 export function DetailPane({ session, height }: DetailPaneProps) {
+  const { stdout } = useStdout();
+  const width = stdout?.columns ?? 120;
   const statusColor = STATUS_COLORS[session.status];
   const statusLabel = STATUS_LABELS[session.status];
   const duration = formatDurationLong(session);
@@ -69,7 +71,8 @@ export function DetailPane({ session, height }: DetailPaneProps) {
 
   // Optional: last tool
   if (session.lastToolName) {
-    const toolLine = ` Last tool: ${session.lastToolName}${session.lastToolArgs ? ` ${session.lastToolArgs}` : ""}`;
+    const args = session.lastToolArgs ? ` ${session.lastToolArgs.replace(/\n/g, " ").replace(/\s+/g, " ")}` : "";
+    const toolLine = ` Last tool: ${session.lastToolName}${args}`.slice(0, width);
     lines.push({ text: toolLine, color: "yellow" });
   }
 
@@ -98,7 +101,7 @@ export function DetailPane({ session, height }: DetailPaneProps) {
   const result: React.ReactNode[] = [];
 
   // Top border
-  result.push(<Text key="top" dimColor>{"─".repeat(60)}</Text>);
+  result.push(<Text key="top" dimColor>{"─".repeat(Math.min(width, 120))}</Text>);
 
   // Content lines
   for (let i = 0; i < displayLines.length; i++) {
@@ -111,7 +114,7 @@ export function DetailPane({ session, height }: DetailPaneProps) {
   }
 
   // Bottom border
-  result.push(<Text key="bottom" dimColor>{"─".repeat(60)}</Text>);
+  result.push(<Text key="bottom" dimColor>{"─".repeat(Math.min(width, 120))}</Text>);
 
   return <>{result}</>;
 }

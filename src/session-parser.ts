@@ -51,6 +51,7 @@ export function parseSessionFile(filePath: string): TrackedSession | null {
     userMessageCount: 0,
     lastToolName: null,
     lastToolArgs: null,
+    lastToolCallStartedAt: null,
     lastAssistantStopReason: null,
     model: null,
     provider: null,
@@ -114,6 +115,7 @@ export function processEntry(session: TrackedSession, entry: SessionEntry): void
       if (msg.role === "user") {
         session.userMessageCount++;
         session.lastAssistantStopReason = null;
+        session.lastToolCallStartedAt = null;
         // Extract user message text
         let userText: string | null = null;
         if (typeof msg.content === "string") {
@@ -160,6 +162,9 @@ export function processEntry(session: TrackedSession, entry: SessionEntry): void
           if (lastToolCall) {
             session.lastToolName = lastToolCall.name ?? null;
             session.lastToolArgs = summarizeArgs(lastToolCall.arguments);
+            if (msg.stopReason === "toolUse") {
+              session.lastToolCallStartedAt = entry.timestamp ? new Date(entry.timestamp) : new Date();
+            }
           }
 
           // Capture last assistant text output

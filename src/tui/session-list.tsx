@@ -36,7 +36,8 @@ export function SessionList({ sessions, selectedIndex, maxHeight }: SessionListP
 
   // Column widths
   const cwdWidth = Math.min(22, Math.max(10, Math.floor(termWidth * 0.15)));
-  const prefixCols = 2 + 2 + 13 + 6 + 9 + cwdWidth + 1;
+  const toolColWidth = 24;
+  const prefixCols = 2 + 2 + 13 + 6 + 9 + cwdWidth + 1 + toolColWidth + 1;
   const promptCols = Math.max(10, termWidth - prefixCols - 2);
 
   // Synchronous scroll tracking via ref — no useEffect delay
@@ -79,7 +80,7 @@ export function SessionList({ sessions, selectedIndex, maxHeight }: SessionListP
         const isSelected = i === selectedIndex;
         const { icon, color, label } = STATUS_DISPLAY[session.status];
         const rawName = (session.name ?? session.lastUserMessage ?? session.prompt ?? "(no prompt)").replace(/\n/g, " ").replace(/\s+/g, " ");
-        const displayName = rawName.slice(0, promptCols);
+        const displayName = rawName.slice(0, Math.max(0, promptCols));
         const cwdShort = shortenCwd(session.cwd).slice(0, cwdWidth);
         const duration = formatDuration(session);
         const statusLabel = (label + modeLabel(session)).padEnd(12);
@@ -91,6 +92,7 @@ export function SessionList({ sessions, selectedIndex, maxHeight }: SessionListP
             <Text dimColor>#{session.shortId} </Text>
             <Text>{duration.padEnd(8)} </Text>
             <Text color="magenta">{cwdShort.padEnd(cwdWidth)} </Text>
+            <Text dimColor>{formatToolCol(session, toolColWidth).padEnd(toolColWidth)} </Text>
             <Text color={isSelected ? "white" : undefined}>{displayName}</Text>
           </Text>
         );
@@ -115,6 +117,10 @@ function formatDuration(session: TrackedSession): string {
     ? Date.now() - session.startedAt.getTime()
     : session.duration ?? 0;
 
+  return formatMs(ms);
+}
+
+function formatMs(ms: number): string {
   const seconds = Math.floor(ms / 1000);
   if (seconds < 60) return `${seconds}s`;
   const minutes = Math.floor(seconds / 60);
@@ -123,4 +129,20 @@ function formatDuration(session: TrackedSession): string {
   const hours = Math.floor(minutes / 60);
   const mins = minutes % 60;
   return `${hours}h${mins.toString().padStart(2, "0")}m`;
+}
+
+function formatToolCol(session: TrackedSession, maxWidth: number): string {
+  if (!session.lastToolName) return "";
+
+  const name = session.lastToolName;
+  const elapsed = session.lastToolCallStartedAt && isAlive(session.status)
+    ? " " + formatMs(Date.now() - session.lastToolCallStartedAt.getTime())
+    : "";
+
+  const full = name + elapsed;
+  if (full.length <= maxWidth) return full;
+  // Truncate tool name, keep elapsed
+  const available = maxWidth - elapsed.length - 1;
+  if (available < 3) return full.slice(0, maxWidth);
+  return name.slice(0, available) + "…" + elapsed;
 }

@@ -58,6 +58,7 @@ export interface TrackedSession {
   userMessageCount: number;
   lastToolName: string | null;
   lastToolArgs: string | null;
+  lastToolCallStartedAt: Date | null;
   lastAssistantStopReason: string | null; // most recent assistant stopReason
   model: string | null;
   provider: string | null;
