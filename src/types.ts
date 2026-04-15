@@ -58,6 +58,7 @@ export interface TrackedSession {
   lastToolName: string | null;
   lastToolArgs: string | null;
   lastToolCallStartedAt: Date | null;
+  lastSubagentArgs: any | null; // raw arguments from the last subagent toolCall
   lastAssistantStopReason: string | null; // most recent assistant stopReason
   model: string | null;
   provider: string | null;
@@ -67,6 +68,11 @@ export interface TrackedSession {
 
   // Cost
   totalUsage: SessionUsage;
+
+  // Subagent info
+  isSubagent: boolean;
+  parentPid: number | null;
+  agentName: string | null;
 
   // Peek buffer — raw JSONL lines for the peek view
   peekLines: string[];

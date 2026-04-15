@@ -3,6 +3,7 @@
 import { openSync, readSync, closeSync, readdirSync, statSync, watch } from "node:fs";
 import { join } from "node:path";
 import { homedir } from "node:os";
+import { execSync } from "node:child_process";
 import { spawn, type ChildProcess } from "node:child_process";
 
 function aLastActivity(s: TrackedSession): number {
@@ -13,7 +14,7 @@ function aLastActivity(s: TrackedSession): number {
   }
 }
 import { parseSessionFile, parseTail } from "./session-parser.js";
-import { findPiProcesses, matchProcessesToSessions, isProcessAlive } from "./process-manager.js";
+import { findPiProcesses, matchProcessesToSessions, isProcessAlive, type UnmatchedPiProcess } from "./process-manager.js";
 import type { TrackedSession, FilterMode, SortMode, SessionStatus } from "./types.js";
 import { isAlive } from "./types.js";
 
@@ -253,7 +254,7 @@ export class SessionTracker {
    */
   private correlateProcesses(): void {
     const piProcs = findPiProcesses();
-    const matches = matchProcessesToSessions(piProcs, this.sessionDir);
+    const { matches, unmatched } = matchProcessesToSessions(piProcs, this.sessionDir);
 
     // Build lookup: sessionFile → match info
     const matchByFile = new Map<string, { pid: number }>();
@@ -261,6 +262,11 @@ export class SessionTracker {
     for (const m of matches) {
       matchByFile.set(m.sessionFile, { pid: m.pid });
       alivePids.add(m.pid);
+    }
+
+    // Also track alive subagent pids
+    for (const u of unmatched) {
+      alivePids.add(u.pid);
     }
 
     for (const [filePath, session] of this.sessions) {
@@ -289,9 +295,21 @@ export class SessionTracker {
         }
       }
     }
+
+    // Handle subagent processes (--no-session) — create/update synthetic sessions.
+    // Include processes whose parent (ppid) is ANY known pi process
+    // (matched or not), since the parent may not always match its session
+    // file on every poll cycle due to mtime thresholds.
+    const allPiPids = new Set(piProcs.map(p => p.pid));
+    this.reconcileSubagents(unmatched, alivePids, allPiPids);
   }
 
   private updateActivityStatus(session: TrackedSession, _filePath: string): void {
+    // Subagents are always "active" while their process runs
+    if (session.isSubagent) {
+      session.status = "interactive-active";
+      return;
+    }
     // The reliable signal is the last assistant stop reason:
     // - "stop" means the agent finished its turn → waiting for user input
     // - anything else ("toolUse", null, etc.) means the agent is still working
@@ -301,6 +319,137 @@ export class SessionTracker {
       session.status = "interactive-idle";
     } else {
       session.status = "interactive-active";
+    }
+  }
+
+  /**
+   * Create/update synthetic TrackedSession entries for --no-session subagent processes.
+   * Remove entries for subagents whose process has exited.
+   */
+  private reconcileSubagents(
+    unmatched: UnmatchedPiProcess[],
+    alivePids: Set<number>,
+    allPiPids: Set<number>,
+  ): void {
+    const subagentKey = (pid: number) => `__subagent__${pid}`;
+
+    // Track which subagent keys are still alive
+    const aliveKeys = new Set<string>();
+
+    for (const proc of unmatched) {
+      // Only treat as subagent if parent is any known pi process
+      if (!allPiPids.has(proc.ppid)) continue;
+
+      const key = subagentKey(proc.pid);
+      aliveKeys.add(key);
+
+      if (this.sessions.has(key)) {
+        // Already tracked — update status and current tool from child processes
+        const existing = this.sessions.get(key)!;
+        existing.status = "interactive-active";
+        this.updateSubagentTool(existing);
+        continue;
+      }
+
+      // Look up parent session to get agent name and task from its subagent toolCall
+      let agentName: string | null = null;
+      let task: string | null = null;
+      let parentToolStartedAt: Date | null = null;
+      for (const [, parentSession] of this.sessions) {
+        if (parentSession.isSubagent) continue;
+        if (parentSession.pid !== proc.ppid) continue;
+        if (parentSession.lastSubagentArgs) {
+          const args = parentSession.lastSubagentArgs;
+          // Single mode: { agent, task }
+          if (args.agent && args.task) {
+            agentName = args.agent;
+            task = args.task;
+          }
+          // Parallel mode: { tasks: [{agent, task}, ...] }
+          // Chain mode: { chain: [{agent, task}, ...] }
+          // We can't match which parallel task corresponds to which PID,
+          // but show the agent name(s) at least
+          if (!agentName && args.tasks?.length) {
+            const agents = [...new Set(args.tasks.map((t: any) => t.agent))];
+            agentName = agents.join(",");
+            if (args.tasks.length === 1) task = args.tasks[0].task;
+          }
+          if (!agentName && args.chain?.length) {
+            const agents = [...new Set(args.chain.map((t: any) => t.agent))];
+            agentName = agents.join("→");
+          }
+          parentToolStartedAt = parentSession.lastToolCallStartedAt;
+        }
+        break;
+      }
+
+      // Create synthetic session
+      const session: TrackedSession = {
+        sessionId: `subagent-${proc.pid}`,
+        shortId: String(proc.pid),
+        sessionFile: key, // synthetic key, not a real file
+        cwd: proc.cwd ?? "",
+        name: null,
+        prompt: task ? task.slice(0, 200) : "(subagent)",
+        lastUserMessage: task ? task.slice(0, 200) : null,
+        status: "interactive-active",
+        pid: proc.pid,
+        startedAt: proc.startTime ? new Date(proc.startTime) : new Date(),
+        endedAt: null,
+        duration: null,
+        lastFileSize: 0,
+        fileGrowingSince: null,
+        turnCount: 0,
+        userMessageCount: 0,
+        lastToolName: agentName ?? "subagent",
+        lastToolArgs: task ? task.slice(0, 80) : null,
+        lastToolCallStartedAt: proc.startTime ? new Date(proc.startTime) : new Date(),
+        lastSubagentArgs: null,
+        lastAssistantStopReason: null,
+        model: null,
+        provider: null,
+        stopReason: null,
+        errorMessage: null,
+        lastOutput: null,
+        totalUsage: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, totalCost: 0 },
+        isSubagent: true,
+        parentPid: proc.ppid,
+        agentName, // We can't easily get agent name from args
+        peekLines: [],
+      };
+
+      this.sessions.set(key, session);
+      this.updateSubagentTool(session);
+    }
+
+    // Remove subagent entries whose process has exited
+    for (const [key, session] of this.sessions) {
+      if (!session.isSubagent) continue;
+      if (!aliveKeys.has(key)) {
+        this.sessions.delete(key);
+      }
+    }
+  }
+
+  /**
+   * Detect what tool a subagent is currently running by inspecting its child processes.
+   * Uses the child process start time for accurate elapsed tracking.
+   */
+  private updateSubagentTool(session: TrackedSession): void {
+    if (!session.pid) return;
+    try {
+      const output = execSync(
+        `ps -o pid,lstart,args= -p $(pgrep -P ${session.pid} 2>/dev/null | tr '\n' ',')0 2>/dev/null`,
+        { encoding: "utf-8", timeout: 3000 }
+      );
+      const result = parseChildProcessPs(output);
+      if (result) {
+        session.lastToolName = "bash";
+        session.lastToolArgs = result.args;
+        session.lastToolCallStartedAt = result.startedAt;
+      }
+    } catch {
+      // No children or pgrep failed
     }
   }
 
@@ -390,4 +539,26 @@ export class SessionTracker {
   private notify(): void {
     this.onChange?.();
   }
+}
+
+/**
+ * Parse `ps -o pid,lstart,args=` output to find the most interesting child process.
+ * Returns the command args and start time, or null if nothing useful found.
+ * Exported for testing.
+ */
+export function parseChildProcessPs(output: string): { args: string; startedAt: Date } | null {
+  for (const line of output.trim().split("\n").reverse()) {
+    // lstart format on macOS: "Wed 15 Apr 13:59:06 2026"
+    const match = line.trim().match(/^(\d+)\s+(\w{3}\s+\d+\s+\w{3}\s+[\d:]+\s+\d{4})\s+(.+)$/);
+    if (!match) continue;
+    const lstart = match[2]!;
+    const args = match[3]!;
+    // Skip node/pi processes themselves
+    if (/^(node|pi)\s/.test(args) || args === "pi") continue;
+    const startTime = new Date(lstart).getTime();
+    if (!isNaN(startTime)) {
+      return { args: args.slice(0, 80), startedAt: new Date(startTime) };
+    }
+  }
+  return null;
 }

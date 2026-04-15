@@ -15,6 +15,13 @@ export interface ProcessSessionMatch {
   sessionFile: string;
 }
 
+export interface UnmatchedPiProcess {
+  pid: number;
+  ppid: number;
+  cwd: string | null;
+  startTime: number | null; // epoch ms
+}
+
 const DEFAULT_SESSION_DIR = join(homedir(), ".pi", "agent", "sessions");
 
 /**
@@ -43,7 +50,7 @@ export function findPiProcesses(): PiProcess[] {
 export function matchProcessesToSessions(
   processes: PiProcess[],
   sessionDir?: string
-): ProcessSessionMatch[] {
+): { matches: ProcessSessionMatch[]; unmatched: UnmatchedPiProcess[] } {
   const dir = sessionDir ?? DEFAULT_SESSION_DIR;
   const matches: ProcessSessionMatch[] = [];
   const startTimes = getProcessStartTimes(processes.map((p) => p.pid));
@@ -56,6 +63,8 @@ export function matchProcessesToSessions(
     group.push(proc);
     byCwd.set(proc.cwd, group);
   }
+
+  const matchedPids = new Set<number>();
 
   for (const [cwd, procs] of byCwd) {
     const encoded = "--" + cwd.replace(/^\//, "").replace(/\//g, "-") + "--";
@@ -130,16 +139,34 @@ export function matchProcessesToSessions(
 
       if (best) {
         claimed.add(best.path);
+        matchedPids.add(proc.pid);
         matches.push({
           pid: proc.pid,
           sessionFile: best.path,
-
         });
       }
     }
   }
 
-  return matches;
+  // Collect unmatched processes — these are likely --no-session subagents.
+  // On macOS, Node.js rewrites process.title so ps only shows "pi" —
+  // we can't read the original args. Any pi process without a session file
+  // is treated as a subagent.
+  const unmatched: UnmatchedPiProcess[] = [];
+  const unmatchedPids = processes.filter(p => !matchedPids.has(p.pid)).map(p => p.pid);
+  const ppids = unmatchedPids.length > 0 ? getProcessPpids(unmatchedPids) : new Map<number, number>();
+
+  for (const proc of processes) {
+    if (matchedPids.has(proc.pid)) continue;
+    unmatched.push({
+      pid: proc.pid,
+      ppid: ppids.get(proc.pid) ?? 0,
+      cwd: proc.cwd,
+      startTime: startTimes.get(proc.pid) ?? null,
+    });
+  }
+
+  return { matches, unmatched };
 }
 
 /**
@@ -254,4 +281,24 @@ export function isProcessAlive(pid: number): boolean {
   } catch {
     return false;
   }
+}
+
+// --- Subagent helpers ---
+
+function getProcessPpids(pids: number[]): Map<number, number> {
+  const result = new Map<number, number>();
+  if (pids.length === 0) return result;
+  try {
+    const output = execSync(
+      `ps -p ${pids.join(",")} -o pid,ppid= 2>/dev/null`,
+      { encoding: "utf-8", timeout: 5000 }
+    );
+    for (const line of output.trim().split("\n")) {
+      const match = line.trim().match(/^(\d+)\s+(\d+)$/);
+      if (match) {
+        result.set(parseInt(match[1]!, 10), parseInt(match[2]!, 10));
+      }
+    }
+  } catch {}
+  return result;
 }

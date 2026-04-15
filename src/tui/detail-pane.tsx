@@ -49,8 +49,9 @@ export function DetailPane({ session, height }: DetailPaneProps) {
 
   // Line 1: status
   let statusLine = ` Session #${session.shortId} — ${statusLabel}`;
-  if (duration) statusLine += ` (${duration})`;
-  if (session.pid) statusLine += ` PID ${session.pid}`;
+  if (session.isSubagent) statusLine = ` ⑂ Subagent PID ${session.pid} — ${statusLabel}`;
+  else if (duration) statusLine += ` (${duration})`;
+  if (session.pid && !session.isSubagent) statusLine += ` PID ${session.pid}`;
   lines.push({ text: statusLine });
 
   // Line 2: CWD

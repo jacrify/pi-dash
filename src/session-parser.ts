@@ -51,6 +51,7 @@ export function parseSessionFile(filePath: string): TrackedSession | null {
     lastToolName: null,
     lastToolArgs: null,
     lastToolCallStartedAt: null,
+    lastSubagentArgs: null,
     lastAssistantStopReason: null,
     model: null,
     provider: null,
@@ -58,6 +59,9 @@ export function parseSessionFile(filePath: string): TrackedSession | null {
     errorMessage: null,
     lastOutput: null,
     totalUsage: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, totalCost: 0 },
+    isSubagent: false,
+    parentPid: null,
+    agentName: null,
     peekLines: [],
   };
 
@@ -161,6 +165,9 @@ export function processEntry(session: TrackedSession, entry: SessionEntry): void
             session.lastToolArgs = summarizeArgs(lastToolCall.arguments);
             if (msg.stopReason === "toolUse") {
               session.lastToolCallStartedAt = entry.timestamp ? new Date(entry.timestamp) : new Date();
+            }
+            if (lastToolCall.name === "subagent") {
+              session.lastSubagentArgs = lastToolCall.arguments ?? null;
             }
           }
 

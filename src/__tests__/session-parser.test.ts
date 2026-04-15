@@ -27,6 +27,7 @@ function makeSession(overrides?: Partial<TrackedSession>): TrackedSession {
     lastToolName: null,
     lastToolArgs: null,
     lastToolCallStartedAt: null,
+    lastSubagentArgs: null,
     lastAssistantStopReason: null,
     model: null,
     provider: null,
@@ -34,6 +35,9 @@ function makeSession(overrides?: Partial<TrackedSession>): TrackedSession {
     errorMessage: null,
     lastOutput: null,
     totalUsage: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, totalCost: 0 },
+    isSubagent: false,
+    parentPid: null,
+    agentName: null,
     peekLines: [],
     ...overrides,
   };
@@ -381,5 +385,33 @@ describe("isAlive", () => {
     expect(isAlive("failed")).toBe(false);
     expect(isAlive("killed")).toBe(false);
     expect(isAlive("unknown")).toBe(false);
+  });
+});
+
+describe("parseSessionFile — subagent fields", () => {
+  let tmpDir: string;
+
+  function makeTmpFile(name: string, content: string): string {
+    tmpDir = mkdtempSync(join(tmpdir(), "session-parser-sub-"));
+    const p = join(tmpDir, name);
+    writeFileSync(p, content);
+    return p;
+  }
+
+  it("initializes isSubagent=false and parentPid=null for normal sessions", () => {
+    const lines = [
+      JSON.stringify({ type: "session", id: "abc", timestamp: "2026-01-01T00:00:00Z", cwd: "/tmp" }),
+      JSON.stringify({ type: "message", message: { role: "user", content: "hello" } }),
+    ];
+    const filePath = makeTmpFile("normal.jsonl", lines.join("\n"));
+    try {
+      const session = parseSessionFile(filePath);
+      expect(session).not.toBeNull();
+      expect(session!.isSubagent).toBe(false);
+      expect(session!.parentPid).toBeNull();
+      expect(session!.agentName).toBeNull();
+    } finally {
+      rmSync(tmpDir, { recursive: true, force: true });
+    }
   });
 });

@@ -22,6 +22,14 @@ const STATUS_DISPLAY: Record<SessionStatus, { icon: string; color: string; label
   "unknown":            { icon: "?", color: "gray",    label: "?" },
 };
 
+function getStatusDisplay(session: TrackedSession): { icon: string; color: string; label: string } {
+  const base = STATUS_DISPLAY[session.status];
+  if (session.isSubagent) {
+    return { ...base, label: "⑂ " + base.label };
+  }
+  return base;
+}
+
 
 
 export function SessionList({ sessions, selectedIndex, maxHeight }: SessionListProps) {
@@ -88,7 +96,7 @@ export function SessionList({ sessions, selectedIndex, maxHeight }: SessionListP
       {visibleSessions.map((session, vi) => {
         const i = scrollTop + vi;
         const isSelected = i === selectedIndex;
-        const { icon, color, label } = STATUS_DISPLAY[session.status];
+        const { icon, color, label } = getStatusDisplay(session);
         const rawName = (session.name ?? session.lastUserMessage ?? session.prompt ?? "(no prompt)").replace(/\n/g, " ").replace(/\s+/g, " ");
         const displayName = rawName.slice(0, Math.max(0, promptCols));
         const cwdShort = shortenCwd(session.cwd).slice(0, cwdWidth);
@@ -127,7 +135,8 @@ function formatDuration(session: TrackedSession): string {
   try {
     ms = Date.now() - statSync(session.sessionFile).mtimeMs;
   } catch {
-    ms = 0;
+    // Synthetic sessions (subagents) have no file — use startedAt
+    ms = Date.now() - session.startedAt.getTime();
   }
   return formatMs(ms);
 }

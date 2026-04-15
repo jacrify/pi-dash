@@ -3,6 +3,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, utimesSync, rmSync } from "node:
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { SessionTracker } from "../session-tracker.js";
+import { parseChildProcessPs } from "../session-tracker.js";
 import type { TrackedSession } from "../types.js";
 
 // --- Helpers ---
@@ -259,5 +260,81 @@ describe("SessionTracker", () => {
       expect(filtered[0]!.sessionId).toBe("alpha1");
       expect(filtered[0]!.cwd).toBe(cwdA);
     });
+  });
+});
+
+describe("parseChildProcessPs", () => {
+  it("parses a single child process with lstart and args", () => {
+    const output = [
+      "  PID STARTED",
+      "17518 Wed 15 Apr 14:00:30 2026     sleep 30",
+    ].join("\n");
+    const result = parseChildProcessPs(output);
+    expect(result).not.toBeNull();
+    expect(result!.args).toBe("sleep 30");
+    expect(result!.startedAt.getTime()).toBe(new Date("Wed 15 Apr 2026 14:00:30").getTime());
+  });
+
+  it("skips node and pi processes, returns the real child", () => {
+    const output = [
+      "  PID STARTED",
+      "10001 Wed 15 Apr 14:00:30 2026     node /opt/homebrew/bin/pi --mode json",
+      "10002 Wed 15 Apr 14:00:31 2026     pi",
+      "10003 Wed 15 Apr 14:00:32 2026     sleep 45",
+    ].join("\n");
+    const result = parseChildProcessPs(output);
+    expect(result).not.toBeNull();
+    expect(result!.args).toBe("sleep 45");
+    // Should use the child process start time, not the node/pi ones
+    expect(result!.startedAt.getTime()).toBe(new Date("Wed 15 Apr 2026 14:00:32").getTime());
+  });
+
+  it("returns null when all children are node/pi", () => {
+    const output = [
+      "  PID STARTED",
+      "10001 Wed 15 Apr 14:00:30 2026     node something",
+      "10002 Wed 15 Apr 14:00:31 2026     pi",
+    ].join("\n");
+    const result = parseChildProcessPs(output);
+    expect(result).toBeNull();
+  });
+
+  it("returns null for empty output", () => {
+    expect(parseChildProcessPs("")).toBeNull();
+    expect(parseChildProcessPs("  PID STARTED\n")).toBeNull();
+  });
+
+  it("picks the last (most recent) non-node child when reversed", () => {
+    const output = [
+      "  PID STARTED",
+      "10003 Wed 15 Apr 14:00:00 2026     sleep 20",
+      "10004 Wed 15 Apr 14:00:25 2026     sleep 25",
+    ].join("\n");
+    const result = parseChildProcessPs(output);
+    expect(result).not.toBeNull();
+    // Reversed iteration: last line first, so sleep 25 is picked
+    expect(result!.args).toBe("sleep 25");
+    expect(result!.startedAt.getTime()).toBe(new Date("Wed 15 Apr 2026 14:00:25").getTime());
+  });
+
+  it("truncates long args to 80 chars", () => {
+    const longCmd = "grep -r " + "x".repeat(200) + " /some/path";
+    const output = [
+      "  PID STARTED",
+      `10003 Wed 15 Apr 14:00:00 2026     ${longCmd}`,
+    ].join("\n");
+    const result = parseChildProcessPs(output);
+    expect(result).not.toBeNull();
+    expect(result!.args.length).toBe(80);
+  });
+
+  it("handles bash -c commands", () => {
+    const output = [
+      "  PID STARTED",
+      "10003 Wed 15 Apr 14:00:00 2026     /bin/bash -c echo hello && sleep 10",
+    ].join("\n");
+    const result = parseChildProcessPs(output);
+    expect(result).not.toBeNull();
+    expect(result!.args).toBe("/bin/bash -c echo hello && sleep 10");
   });
 });
