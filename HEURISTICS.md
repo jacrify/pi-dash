@@ -2,10 +2,9 @@
 
 ## The Problem
 
-Pi doesn't record its launch mode (`-p` vs interactive) in session files, and
-doesn't keep session files open (it does atomic append-and-close per write).
-This means we have no file handles to match and no metadata to read. We have
-to reconstruct which process owns which session from indirect signals.
+Pi doesn't keep session files open (it does atomic append-and-close per write).
+This means we have no file handles to match. We have to reconstruct which
+process owns which session from indirect signals.
 
 ## Signals Available
 
@@ -13,11 +12,10 @@ to reconstruct which process owns which session from indirect signals.
 |--------|--------|-------------|
 | Process exists | `ps` | ✓ Definitive |
 | Process cwd | `lsof -d cwd` | ✓ Definitive |
-| Process stdin fd type | `lsof -d 0` | ✓ Definitive for interactive vs -p |
 | Process start time | `ps -o lstart` | ✓ Definitive |
 | Session file creation time | Encoded in filename | ✓ Definitive |
 | Session file mtime | `stat` | ✓ But shared-cwd ambiguity |
-| Session file content | `.jsonl` entries | Tells us turns/errors, not mode |
+| Session file content | `.jsonl` entries | Tells us turns/errors/activity state |
 
 ## Process → Session Matching (`process-manager.ts`)
 
@@ -28,13 +26,8 @@ or `node .../pi`. Returns PIDs.
 
 ### Step 2: Get cwds and stdin types (batched)
 
-Single `lsof` calls for all PIDs at once:
+Single `lsof` call for all PIDs at once:
 - `lsof -a -d cwd -p <pids>` → maps PID to working directory
-- `lsof -a -d 0 -p <pids>` → maps PID to interactive status
-
-**Interactive detection**: fd 0 pointing to `/dev/ttysNNN` or `/dev/pts/N`
-means interactive (real terminal). `/dev/null` or `PIPE` means non-interactive
-(`-p` mode, piped input, backgrounded with redirected stdin, etc).
 
 ### Step 3: Group by cwd, match to session files
 
@@ -88,13 +81,13 @@ This can happen during startup before the first write, or for `--no-session` run
 
 ### For live processes (matched to a session file)
 
+Activity status is determined entirely from session file content — specifically
+the last assistant message's `stopReason`:
+
 | Condition | Status |
 |-----------|--------|
-| Process alive + stdin is not a TTY | `running` |
-| Process alive + stdin is TTY + file grew this poll | `interactive-active` |
-| Process alive + stdin is TTY + file idle > 2 polls | `interactive-idle` |
-| Process alive + stdin is TTY + never seen growth + last assistant `stopReason: "stop"` | `interactive-idle` |
-| Process alive + stdin is TTY + never seen growth + no stop | `interactive-active` |
+| Process alive + last `stopReason` is `"stop"` or `"aborted"` | `interactive-idle` |
+| Process alive + last `stopReason` is anything else (including `null`) | `interactive-active` |
 
 **File growth detection**: each poll cycle (default 2s), we compare the session
 file size to its size from the previous cycle. If it grew, the agent is actively
@@ -117,22 +110,11 @@ finished-status resolution.
 
 ### Interactive flag preservation
 
-The `interactive` field is `boolean | null`:
-
-| Value | Meaning |
-|-------|---------|
-| `true` | Observed alive with stdin = TTY |
-| `false` | Observed alive with stdin ≠ TTY |
-| `null` | Never observed alive — we don't know |
-
-Once set from process observation, the value is preserved through process death
-and across poll cycles. The TUI displays `(i)` or `(-p)` suffix on finished
-sessions where we know the mode, nothing for `null`.
-
-**Why not heuristic?** We considered inferring mode from user message count
-(1 message = likely `-p`), but `pi -c -p "follow up"` continues a session in
-print mode, and interactive sessions can have just one message. The only reliable
-signal is the live stdin check.
+_(Removed)_ The `interactive` boolean flag was previously set by checking
+whether a process's stdin was a TTY via `lsof -d 0`. This was unreliable
+(lsof failures defaulted to `true`, only valid while the process was alive)
+and unnecessary — session activity state is now determined entirely from
+the session log data (`stopReason`, `lastToolCallStartedAt`, etc.).
 
 ## Polling Architecture
 

@@ -11,7 +11,7 @@ export function HelpOverlay() {
 
       <Text bold>Session Categories</Text>
       <Box flexDirection="column" paddingLeft={2}>
-        <Text><Text color="green">▶ running</Text>     Non-interactive (pi -p), process alive</Text>
+        <Text><Text color="green">▶ running</Text>     Process alive, agent is working</Text>
         <Text><Text color="green">● active</Text>      Interactive session, agent working</Text>
         <Text><Text color="blue">◉ idle</Text>        Interactive session, waiting for input</Text>
         <Text><Text color="cyan">✓ done</Text>        Finished successfully</Text>
@@ -30,6 +30,7 @@ export function HelpOverlay() {
         <Text><Text color="yellow">/</Text>         Search — filter sessions by log content</Text>
         <Text><Text color="yellow">f</Text>         Cycle filter (all → interactive → running → finished)</Text>
         <Text><Text color="yellow">s</Text>         Cycle sort (newest → status → cwd → cost)</Text>
+        <Text><Text color="yellow">d</Text>         Filter by directory of selected session (toggle)</Text>
         <Text><Text color="yellow">r</Text>         Refresh — re-scan sessions</Text>
         <Text><Text color="yellow">q</Text>         Quit</Text>
       </Box>
@@ -56,7 +57,7 @@ export function HelpOverlay() {
 
       <Text bold>Detection</Text>
       <Box flexDirection="column" paddingLeft={2}>
-        <Text dimColor>Interactive vs -p: detected via stdin fd (TTY = interactive, /dev/null = -p)</Text>
+        <Text dimColor>Session activity is determined from the session log data (tool calls, stop reasons).</Text>
         <Text dimColor>Active vs idle: detected via session file growth between poll cycles</Text>
       </Box>
       <Text> </Text>

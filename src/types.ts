@@ -3,9 +3,9 @@
 /**
  * Four session categories:
  *
- *   interactive-idle    — interactive session, process alive, waiting for user input
- *   interactive-active  — interactive session, process alive, agent is working (streaming/tools)
- *   running             — non-interactive (-p), process alive, agent is working
+ *   interactive-idle    — process alive, waiting for user input (last stop reason was "stop" or "aborted")
+ *   interactive-active  — process alive, agent is working (streaming/tools)
+ *   running             — process alive, agent is working (no stop reason yet)
  *   finished            — process exited (subcategories: done / failed / killed)
  */
 export type SessionStatus =
@@ -44,7 +44,6 @@ export interface TrackedSession {
   // Status
   status: SessionStatus;
   pid: number | null;
-  interactive: boolean | null;  // true = interactive, false = -p, null = never observed
   startedAt: Date;
   endedAt: Date | null;
   duration: number | null;
@@ -111,5 +110,6 @@ export interface AppState {
   searchQuery: string;
   searchMode: boolean;
   searchMatchFiles: Set<string> | null; // null = no active search, Set = grep results
+  pathFilter: string | null; // null = off, string = filter to this cwd
   view: "list" | "peek" | "help";
 }

@@ -22,12 +22,7 @@ const STATUS_DISPLAY: Record<SessionStatus, { icon: string; color: string; label
   "unknown":            { icon: "?", color: "gray",    label: "?" },
 };
 
-/** Suffix to show whether a finished session was interactive or -p */
-function modeLabel(session: TrackedSession): string {
-  if (isAlive(session.status)) return "";
-  if (session.interactive === null) return "";
-  return session.interactive ? " (i)" : " (-p)";
-}
+
 
 export function SessionList({ sessions, selectedIndex, maxHeight }: SessionListProps) {
   const { stdout } = useStdout();
@@ -98,7 +93,7 @@ export function SessionList({ sessions, selectedIndex, maxHeight }: SessionListP
         const displayName = rawName.slice(0, Math.max(0, promptCols));
         const cwdShort = shortenCwd(session.cwd).slice(0, cwdWidth);
         const duration = formatDuration(session);
-        const statusLabel = (label + modeLabel(session)).padEnd(12);
+        const statusLabel = label.padEnd(12);
 
         return (
           <Text key={session.sessionFile} wrap="truncate">
@@ -152,7 +147,7 @@ function formatToolCol(session: TrackedSession, maxWidth: number): string {
   if (!session.lastToolName) return "";
 
   const name = session.lastToolName;
-  const elapsed = session.lastToolCallStartedAt && isAlive(session.status)
+  const elapsed = session.lastToolCallStartedAt && session.status === "interactive-active"
     ? " " + formatMs(Date.now() - session.lastToolCallStartedAt.getTime())
     : "";
 

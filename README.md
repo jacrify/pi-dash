@@ -11,7 +11,7 @@ pi-dash gives you a unified view of all your pi sessions — running, waiting, f
 ```
 pi-dash  │ 3 running │ 2 waiting │ 12 done │ 1 failed │        ? help
   STATUS         ID    AGE      DIRECTORY              LAST TOOL                TASK
-  ▶ pi -p        #a3f2 4s       ~/code                 bash 3m02s               Fix the auth bug in log...
+  ▶ running      #a3f2 4s       ~/code                 bash 3m02s               Fix the auth bug in log...
   ● active       #c8b1 2s       ~/api                  read 1s                  Add rate limiting to...
   ◉ waiting      #d4e2 35s      ~/code                 bash                     Refactor the database...
 > ✓ done         #b1c4 12m      ~/code                 bash                     Add unit tests for...
@@ -30,9 +30,9 @@ pi-dash  │ 3 running │ 2 waiting │ 12 done │ 1 failed │        ? help
 
 | Icon | Status | Meaning |
 |------|--------|---------|
-| `▶` | pi -p | Non-interactive session, agent working |
-| `●` | active | Interactive session, agent working |
-| `◉` | waiting | Interactive session, waiting for user input |
+| `▶` | running | Agent is working (no stop reason yet) |
+| `●` | active | Agent is working (streaming or running tools) |
+| `◉` | waiting | Waiting for user input |
 | `✓` | done | Completed successfully |
 | `✗` | failed | Ended with error |
 | `◼` | killed | Process died without clean exit |
@@ -90,9 +90,8 @@ pi always writes structured JSONL to session files regardless of mode (`-p`, int
 
 1. **Scans** `~/.pi/agent/sessions/` for all `.jsonl` files
 2. **Correlates** live `pi` processes to session files via `ps` + `lsof` (matching process start times to file creation timestamps)
-3. **Detects interactive vs `-p`** by checking if the process's stdin is a TTY
-4. **Determines activity** using the last assistant message's `stopReason` — `"stop"` or `"aborted"` means waiting for user input, anything else means the agent is working
-5. **Tails** active session files for real-time updates
+3. **Determines activity** using the last assistant message's `stopReason` — `"stop"` or `"aborted"` means waiting for user input, anything else means the agent is working
+4. **Tails** active session files for real-time updates
 
 See [HEURISTICS.md](HEURISTICS.md) for the full process-correlation and status-detection logic.
 

@@ -69,7 +69,7 @@ const tracker = new SessionTracker({
   pollIntervalMs: pollInterval,
 });
 
-// Non-interactive modes
+// Non-TUI modes
 if (jsonMode || listMode) {
   tracker.start(() => {});
   // Give a moment for initial scan + process correlation
@@ -94,10 +94,8 @@ if (jsonMode || listMode) {
         const home = process.env.HOME ?? "";
         const cwd = home && s.cwd.startsWith(home) ? "~" + s.cwd.slice(home.length) : s.cwd;
         const prompt = (s.name ?? s.prompt ?? "").slice(0, 40);
-        const isLive = s.status === "running" || s.status === "interactive-active" || s.status === "interactive-idle";
-        const mode = isLive ? "" : s.interactive === false ? " (-p)" : s.interactive === true ? " (i)" : "";
         console.log(
-          `${(s.status + mode).padEnd(20)} #${s.shortId}  ${dur.padEnd(9)} ${cwd.padEnd(21)} ${prompt}`
+          `${s.status.padEnd(20)} #${s.shortId}  ${dur.padEnd(9)} ${cwd.padEnd(21)} ${prompt}`
         );
         if (s.lastOutput) {
           console.log(

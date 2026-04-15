@@ -232,7 +232,6 @@ export class SessionTracker {
         // Preserve process info from existing tracking
         if (existing) {
           session.pid = existing.pid;
-          session.interactive = existing.interactive;
           session.fileGrowingSince = existing.fileGrowingSince;
           if (isAlive(existing.status)) {
             session.status = existing.status;
@@ -257,10 +256,10 @@ export class SessionTracker {
     const matches = matchProcessesToSessions(piProcs, this.sessionDir);
 
     // Build lookup: sessionFile → match info
-    const matchByFile = new Map<string, { pid: number; interactive: boolean }>();
+    const matchByFile = new Map<string, { pid: number }>();
     const alivePids = new Set<number>();
     for (const m of matches) {
-      matchByFile.set(m.sessionFile, { pid: m.pid, interactive: m.interactive });
+      matchByFile.set(m.sessionFile, { pid: m.pid });
       alivePids.add(m.pid);
     }
 
@@ -270,13 +269,7 @@ export class SessionTracker {
       if (match) {
         // Process is alive and matched to this session
         session.pid = match.pid;
-        session.interactive = match.interactive;
-
-        if (!match.interactive) {
-          session.status = "running";
-        } else {
-          this.updateActivityStatus(session, filePath);
-        }
+        this.updateActivityStatus(session, filePath);
       } else if (session.pid && !isProcessAlive(session.pid)) {
         // Process we were tracking died
         session.pid = null;

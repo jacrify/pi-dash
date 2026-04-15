@@ -5,15 +5,22 @@ import { Box, Text } from "ink";
 import type { TrackedSession, FilterMode, SortMode } from "../types.js";
 import { isAlive } from "../types.js";
 
+function shortenPath(cwd: string): string {
+  const home = process.env.HOME ?? "";
+  if (home && cwd.startsWith(home)) return "~" + cwd.slice(home.length);
+  return cwd;
+}
+
 interface HeaderBarProps {
   sessions: TrackedSession[];
   filter: FilterMode;
   sort: SortMode;
   searchMode: boolean;
   searchQuery: string;
+  pathFilter: string | null;
 }
 
-export function HeaderBar({ sessions, filter, sort, searchMode, searchQuery }: HeaderBarProps) {
+export function HeaderBar({ sessions, filter, sort, searchMode, searchQuery, pathFilter }: HeaderBarProps) {
   const interactive = sessions.filter((s) => s.status === "interactive-idle" || s.status === "interactive-active").length;
   const running = sessions.filter((s) => s.status === "running").length;
   const done = sessions.filter((s) => s.status === "done").length;
@@ -35,6 +42,10 @@ export function HeaderBar({ sessions, filter, sort, searchMode, searchQuery }: H
         <>
           <Text dimColor>filter:</Text>
           <Text color="white">{filter}</Text>
+          {pathFilter && (
+            <><Text dimColor>path:</Text>
+            <Text color="yellow">{shortenPath(pathFilter)}</Text></>
+          )}
           <Text dimColor>sort:</Text>
           <Text color="white">{sort}</Text>
           <Text dimColor>│ ? help</Text>

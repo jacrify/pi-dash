@@ -48,6 +48,7 @@ export function App({ tracker, onResume }: AppProps) {
     searchQuery: "",
     searchMode: false,
     searchMatchFiles: null,
+    pathFilter: null,
     view: "list",
   });
 
@@ -57,7 +58,7 @@ export function App({ tracker, onResume }: AppProps) {
   stateRef.current = state;
 
   const refresh = () => {
-    const { filter, sort, searchQuery, selectedSessionId, selectedIndex, searchMatchFiles } = stateRef.current;
+    const { filter, sort, searchQuery, selectedSessionId, selectedIndex, searchMatchFiles, pathFilter } = stateRef.current;
     let sessions = tracker.getFilteredSessions(filter, sort, searchQuery);
 
     // Apply grep search results
@@ -66,6 +67,11 @@ export function App({ tracker, onResume }: AppProps) {
     } else if (searchMatchFiles !== null && stateRef.current.searchQuery) {
       // Active search with no matches
       sessions = [];
+    }
+
+    // Apply path filter
+    if (pathFilter) {
+      sessions = sessions.filter((s) => s.cwd === pathFilter);
     }
 
     const newIndex = resolveSelectedIndex(sessions, selectedSessionId, selectedIndex);
@@ -89,7 +95,7 @@ export function App({ tracker, onResume }: AppProps) {
 
   useEffect(() => {
     refresh();
-  }, [state.filter, state.sort, state.searchQuery, state.searchMatchFiles]);
+  }, [state.filter, state.sort, state.searchQuery, state.searchMatchFiles, state.pathFilter]);
 
   const triggerSearch = useCallback((query: string) => {
     if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
@@ -224,6 +230,13 @@ export function App({ tracker, onResume }: AppProps) {
       });
     } else if (input === "R" && selected && onResume && !selected.pid) {
       onResume(selected.sessionFile);
+    } else if (input === "d") {
+      setState((prev) => {
+        const sel = prev.sessions[prev.selectedIndex];
+        if (!sel) return prev;
+        const newFilter = prev.pathFilter === sel.cwd ? null : sel.cwd;
+        return { ...prev, pathFilter: newFilter };
+      });
     } else if (input === "r") {
       tracker.refresh();
     }
@@ -246,7 +259,7 @@ export function App({ tracker, onResume }: AppProps) {
 
   return (
     <Box flexDirection="column" width="100%">
-      <HeaderBar sessions={state.sessions} filter={state.filter} sort={state.sort} searchMode={state.searchMode} searchQuery={state.searchQuery} />
+      <HeaderBar sessions={state.sessions} filter={state.filter} sort={state.sort} searchMode={state.searchMode} searchQuery={state.searchQuery} pathFilter={state.pathFilter} />
       <SessionList sessions={state.sessions} selectedIndex={state.selectedIndex} maxHeight={listLines} />
       {selected && (
         <DetailPane session={selected} height={detailLines} />

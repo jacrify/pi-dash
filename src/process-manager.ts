@@ -3,36 +3,32 @@
 import { execSync } from "node:child_process";
 import { readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
-import { homedir, platform } from "node:os";
+import { homedir } from "node:os";
 
 export interface PiProcess {
   pid: number;
   cwd: string | null;
-  interactive: boolean;
 }
 
 export interface ProcessSessionMatch {
   pid: number;
   sessionFile: string;
-  interactive: boolean;
 }
 
 const DEFAULT_SESSION_DIR = join(homedir(), ".pi", "agent", "sessions");
 
 /**
- * Find all running pi processes with their cwds and interactive mode.
+ * Find all running pi processes with their cwds.
  */
 export function findPiProcesses(): PiProcess[] {
   const pids = findPiPids();
   if (pids.length === 0) return [];
 
   const cwds = getPidCwds(pids);
-  const interactiveMap = getInteractiveStatus(pids);
 
   return pids.map((pid) => ({
     pid,
     cwd: cwds.get(pid) ?? null,
-    interactive: interactiveMap.get(pid) ?? true,
   }));
 }
 
@@ -137,7 +133,7 @@ export function matchProcessesToSessions(
         matches.push({
           pid: proc.pid,
           sessionFile: best.path,
-          interactive: proc.interactive,
+
         });
       }
     }
@@ -210,7 +206,7 @@ function findPiPids(): number[] {
   }
 }
 
-// --- CWD and interactive detection (batched lsof calls) ---
+// --- CWD detection (batched lsof calls) ---
 
 function getPidCwds(pids: number[]): Map<number, string> {
   const result = new Map<number, string>();
@@ -232,39 +228,6 @@ function getPidCwds(pids: number[]): Map<number, string> {
       }
     }
   } catch {}
-
-  return result;
-}
-
-function getInteractiveStatus(pids: number[]): Map<number, boolean> {
-  const result = new Map<number, boolean>();
-  if (pids.length === 0) return result;
-
-  if (platform() !== "darwin" && platform() !== "linux") {
-    for (const pid of pids) result.set(pid, true);
-    return result;
-  }
-
-  try {
-    const output = execSync(
-      `lsof -a -d 0 -p ${pids.join(",")} 2>/dev/null`,
-      { encoding: "utf-8", timeout: 10000 }
-    );
-    // Parse: each line with a pid tells us about fd 0
-    for (const line of output.trim().split("\n")) {
-      const parts = line.trim().split(/\s+/);
-      if (parts.length < 2) continue;
-      const pid = parseInt(parts[1]!, 10);
-      if (isNaN(pid) || !pids.includes(pid)) continue;
-      const isTty = /\/dev\/ttys/.test(line) || /\/dev\/pts\//.test(line);
-      result.set(pid, isTty);
-    }
-  } catch {}
-
-  // Default: interactive for anything we couldn't check
-  for (const pid of pids) {
-    if (!result.has(pid)) result.set(pid, true);
-  }
 
   return result;
 }

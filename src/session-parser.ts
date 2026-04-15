@@ -41,7 +41,6 @@ export function parseSessionFile(filePath: string): TrackedSession | null {
     lastUserMessage: null,
     status: "unknown",
     pid: null,
-    interactive: null,
     startedAt: new Date(header.timestamp ?? Date.now()),
     endedAt: null,
     duration: null,
@@ -91,10 +90,8 @@ export function parseSessionFile(filePath: string): TrackedSession | null {
     }
   }
 
-  // We can only know interactive vs -p from live process observation.
-  // Default to null (unknown) — tracker will set it from process correlation
-  // if it catches the process alive, and preserve it after death.
-  // session.interactive defaults to true in the struct, override to reflect uncertainty.
+  // We determine session activity from the session data itself
+  // (lastAssistantStopReason, lastToolCallStartedAt, etc.)
 
   if (session.endedAt && session.startedAt) {
     session.duration = session.endedAt.getTime() - session.startedAt.getTime();
