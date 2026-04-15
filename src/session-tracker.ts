@@ -3,6 +3,7 @@
 import { openSync, readSync, closeSync, readdirSync, statSync, watch } from "node:fs";
 import { join } from "node:path";
 import { homedir } from "node:os";
+import { spawn, type ChildProcess } from "node:child_process";
 
 function aLastActivity(s: TrackedSession): number {
   try {
@@ -22,22 +23,26 @@ export interface SessionTrackerOptions {
   sessionDir?: string;
   cwdFilter?: string;
   pollIntervalMs?: number;
+  searchDays?: number;
 }
 
 export class SessionTracker {
   private sessionDir: string;
   private cwdFilter: string | null;
   private pollIntervalMs: number;
+  private searchDays: number;
   private sessions: Map<string, TrackedSession> = new Map();
   private fileTailOffsets: Map<string, number> = new Map();
   private pollTimer: ReturnType<typeof setInterval> | null = null;
   private watchers: ReturnType<typeof watch>[] = [];
   private onChange: (() => void) | null = null;
+  private grepProc: ChildProcess | null = null;
 
   constructor(options: SessionTrackerOptions = {}) {
     this.sessionDir = options.sessionDir ?? DEFAULT_SESSION_DIR;
     this.cwdFilter = options.cwdFilter ?? null;
     this.pollIntervalMs = options.pollIntervalMs ?? 2000;
+    this.searchDays = options.searchDays ?? 30;
   }
 
   start(onChange: () => void): void {
@@ -78,16 +83,8 @@ export class SessionTracker {
       list = list.filter((s) => s.status === "done" || s.status === "failed" || s.status === "killed");
     }
 
-    if (search) {
-      const q = search.toLowerCase();
-      list = list.filter(
-        (s) =>
-          s.prompt.toLowerCase().includes(q) ||
-          s.cwd.toLowerCase().includes(q) ||
-          s.shortId.toLowerCase().includes(q) ||
-          (s.name?.toLowerCase().includes(q) ?? false)
-      );
-    }
+    // search filtering is handled externally via searchFiles() + searchMatchFiles
+    void search;
 
     list.sort((a, b) => {
       switch (sort) {
@@ -120,6 +117,77 @@ export class SessionTracker {
     });
 
     return list;
+  }
+
+  /**
+   * Get session file paths that are within the search-days window.
+   * Uses file mtime which is already stat'd during scan.
+   */
+  private getCandidateFiles(): string[] {
+    const cutoff = Date.now() - this.searchDays * 24 * 60 * 60 * 1000;
+    const files: string[] = [];
+    for (const [filePath, session] of this.sessions) {
+      // Use mtime from the file — we already stat these during scan
+      try {
+        const mtime = statSync(filePath).mtimeMs;
+        if (mtime >= cutoff) {
+          files.push(filePath);
+        }
+      } catch {
+        // File gone, skip
+      }
+    }
+    return files;
+  }
+
+  /**
+   * Search session files for a query string using grep.
+   * Kills any in-flight grep. Returns matching file paths via callback.
+   */
+  searchFiles(query: string, callback: (matchingFiles: Set<string>) => void): void {
+    // Kill any in-flight grep
+    if (this.grepProc) {
+      this.grepProc.kill();
+      this.grepProc = null;
+    }
+
+    if (!query) {
+      callback(new Set());
+      return;
+    }
+
+    const candidateFiles = this.getCandidateFiles();
+    if (candidateFiles.length === 0) {
+      callback(new Set());
+      return;
+    }
+
+    // Spawn grep -Fil with file list via xargs to avoid ARG_MAX
+    const proc = spawn("xargs", ["grep", "-Fil", query], {
+      stdio: ["pipe", "pipe", "pipe"],
+    });
+    this.grepProc = proc;
+
+    let stdout = "";
+    proc.stdout!.on("data", (chunk: Buffer) => {
+      stdout += chunk.toString();
+    });
+
+    proc.on("close", (code) => {
+      if (proc !== this.grepProc && this.grepProc !== null) {
+        // A newer search superseded this one
+        return;
+      }
+      this.grepProc = null;
+      const files = new Set(
+        stdout.trim().split("\n").filter(Boolean)
+      );
+      callback(files);
+    });
+
+    // Write file list to stdin, one per line
+    proc.stdin!.write(candidateFiles.join("\n") + "\n");
+    proc.stdin!.end();
   }
 
   refresh(): void {

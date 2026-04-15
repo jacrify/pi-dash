@@ -1,6 +1,6 @@
 // Main TUI app — top-level layout and state management
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { Box, Text, useApp, useInput, useStdout } from "ink";
 import { SessionTracker } from "../session-tracker.js";
 import { killProcess } from "../process-manager.js";
@@ -45,22 +45,33 @@ export function App({ tracker }: AppProps) {
     filter: "all",
     sort: "newest",
     searchQuery: "",
+    searchMode: false,
+    searchMatchFiles: null,
     view: "list",
-
   });
+
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const stateRef = useRef(state);
   stateRef.current = state;
 
   const refresh = () => {
-    const { filter, sort, searchQuery, selectedSessionId, selectedIndex } = stateRef.current;
-    const sessions = tracker.getFilteredSessions(filter, sort, searchQuery);
+    const { filter, sort, searchQuery, selectedSessionId, selectedIndex, searchMatchFiles } = stateRef.current;
+    let sessions = tracker.getFilteredSessions(filter, sort, searchQuery);
+
+    // Apply grep search results
+    if (searchMatchFiles !== null && searchMatchFiles.size > 0) {
+      sessions = sessions.filter((s) => searchMatchFiles.has(s.sessionFile));
+    } else if (searchMatchFiles !== null && stateRef.current.searchQuery) {
+      // Active search with no matches
+      sessions = [];
+    }
+
     const newIndex = resolveSelectedIndex(sessions, selectedSessionId, selectedIndex);
     setState((prev) => ({
       ...prev,
       sessions,
       selectedIndex: newIndex,
-      // Keep the same selectedSessionId — it stays until the user moves
     }));
   };
 
@@ -75,7 +86,24 @@ export function App({ tracker }: AppProps) {
 
   useEffect(() => {
     refresh();
-  }, [state.filter, state.sort, state.searchQuery]);
+  }, [state.filter, state.sort, state.searchQuery, state.searchMatchFiles]);
+
+  const triggerSearch = useCallback((query: string) => {
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    if (!query) {
+      setState((prev) => ({ ...prev, searchMatchFiles: null }));
+      return;
+    }
+    searchTimerRef.current = setTimeout(() => {
+      tracker.searchFiles(query, (matchingFiles) => {
+        setState((prev) => {
+          // Only apply if query hasn't changed since we started
+          if (prev.searchQuery !== query) return prev;
+          return { ...prev, searchMatchFiles: matchingFiles };
+        });
+      });
+    }, 150);
+  }, [tracker]);
 
   const selected: TrackedSession | null = state.sessions[state.selectedIndex] ?? null;
 
@@ -93,17 +121,67 @@ export function App({ tracker }: AppProps) {
   };
 
   useInput((input, key) => {
-    if (input === "q" || (key.escape && state.view === "list")) {
-      if (state.view === "list") {
-        exit();
+    // --- Search mode input handling ---
+    if (state.searchMode) {
+      if (key.escape) {
+        // Exit search, clear query
+        setState((prev) => ({
+          ...prev,
+          searchMode: false,
+          searchQuery: "",
+          searchMatchFiles: null,
+        }));
         return;
       }
-      setState((prev) => ({ ...prev, view: "list" }));
+      if (key.return) {
+        // Confirm search, exit search mode but keep filter
+        setState((prev) => ({ ...prev, searchMode: false }));
+        return;
+      }
+      if (key.backspace || key.delete) {
+        setState((prev) => {
+          const q = prev.searchQuery.slice(0, -1);
+          triggerSearch(q);
+          return { ...prev, searchQuery: q };
+        });
+        return;
+      }
+      // Navigation still works during search
+      if (key.upArrow) {
+        moveTo(state.selectedIndex - 1);
+        return;
+      }
+      if (key.downArrow) {
+        moveTo(state.selectedIndex + 1);
+        return;
+      }
+      // Printable character → append to query
+      if (input && !key.ctrl && !key.meta) {
+        setState((prev) => {
+          const q = prev.searchQuery + input;
+          triggerSearch(q);
+          return { ...prev, searchQuery: q };
+        });
+      }
       return;
     }
 
+    // --- Normal mode ---
     if (key.escape) {
-      setState((prev) => ({ ...prev, view: "list" }));
+      if (state.searchQuery) {
+        // Clear active search filter
+        setState((prev) => ({ ...prev, searchQuery: "", searchMatchFiles: null }));
+        return;
+      }
+      if (state.view !== "list") {
+        setState((prev) => ({ ...prev, view: "list" }));
+        return;
+      }
+      return;
+    }
+
+    if (input === "q" && state.view === "list") {
+      exit();
       return;
     }
 
@@ -117,7 +195,9 @@ export function App({ tracker }: AppProps) {
     if (state.view === "peek") return; // PeekView handles its own input
 
     // List mode
-    if (key.upArrow || input === "k") {
+    if (input === "/") {
+      setState((prev) => ({ ...prev, searchMode: true, searchQuery: "", searchMatchFiles: null }));
+    } else if (key.upArrow || input === "k") {
       moveTo(state.selectedIndex - 1);
     } else if (key.downArrow || input === "j") {
       moveTo(state.selectedIndex + 1);
@@ -161,7 +241,7 @@ export function App({ tracker }: AppProps) {
 
   return (
     <Box flexDirection="column" width="100%">
-      <HeaderBar sessions={state.sessions} filter={state.filter} sort={state.sort} />
+      <HeaderBar sessions={state.sessions} filter={state.filter} sort={state.sort} searchMode={state.searchMode} searchQuery={state.searchQuery} />
       <SessionList sessions={state.sessions} selectedIndex={state.selectedIndex} maxHeight={listLines} />
       {selected && (
         <DetailPane session={selected} height={detailLines} />

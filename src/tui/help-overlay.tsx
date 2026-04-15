@@ -26,10 +26,20 @@ export function HelpOverlay() {
         <Text><Text color="yellow">Enter/p</Text>   Peek — view session event log</Text>
         <Text><Text color="yellow">K</Text>         Kill — SIGTERM running session</Text>
         <Text><Text color="yellow">!</Text>         Force kill — SIGKILL</Text>
+        <Text><Text color="yellow">/</Text>         Search — filter sessions by log content</Text>
         <Text><Text color="yellow">f</Text>         Cycle filter (all → interactive → running → finished)</Text>
         <Text><Text color="yellow">s</Text>         Cycle sort (newest → status → cwd → cost)</Text>
         <Text><Text color="yellow">r</Text>         Refresh — re-scan sessions</Text>
         <Text><Text color="yellow">q</Text>         Quit</Text>
+      </Box>
+      <Text> </Text>
+
+      <Text bold>Search Mode</Text>
+      <Box flexDirection="column" paddingLeft={2}>
+        <Text><Text color="yellow">type</Text>    Live filter as you type</Text>
+        <Text><Text color="yellow">Enter</Text>   Confirm search, return to list</Text>
+        <Text><Text color="yellow">Esc</Text>     Cancel search, clear filter</Text>
+        <Text><Text color="yellow">↑/↓</Text>     Navigate filtered results</Text>
       </Box>
       <Text> </Text>
 

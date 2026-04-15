@@ -109,5 +109,7 @@ export interface AppState {
   filter: FilterMode;
   sort: SortMode;
   searchQuery: string;
+  searchMode: boolean;
+  searchMatchFiles: Set<string> | null; // null = no active search, Set = grep results
   view: "list" | "peek" | "help";
 }

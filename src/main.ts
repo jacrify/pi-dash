@@ -53,6 +53,7 @@ Options:
 
 Keybindings:
   ↑/k ↓/j   Navigate        Enter/p  Peek session
+  /          Search           Esc      Cancel search
   K          Kill (SIGTERM)   !        Force kill (SIGKILL)
   f          Cycle filter     s        Cycle sort
   r          Refresh          ?        Help
