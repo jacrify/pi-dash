@@ -1,0 +1,96 @@
+# pi-dash
+
+A terminal dashboard for monitoring [pi](https://github.com/mariozechner/pi) coding agent sessions.
+
+![Status](https://img.shields.io/badge/status-alpha-orange)
+
+## What it does
+
+pi-dash gives you a unified view of all your pi sessions — running, waiting, finished, or failed — in a single terminal UI. It works by monitoring pi's session files (`~/.pi/agent/sessions/`) and correlating them with live processes.
+
+```
+pi-dash  │ 3 running │ 2 waiting │ 12 done │ 1 failed │        ? help
+─────────────────────────────────────────────────────────────────────────
+ ▶ pi -p        #a3f2 2m14s  ~/code         Fix the auth bug in log...
+ ● active       #c8b1 45s    ~/api          Add rate limiting to...
+ ◉ waiting      #d4e2 3m01s  ~/code         Refactor the database...
+>✓ done         #b1c4 1m02s  ~/code         Add unit tests for...
+ ✗ failed       #e7d9 3m30s  ~/api          Deploy the hotfix...
+ ◼ killed       #f0a1 0m12s  ~/code         Refactor database...
+─────────────────────────────────────────────────────────────────────────
+ Session #b1c4 — Done (1m 02s)
+ Model: claude-sonnet-4-5 (anthropic)
+ CWD: /Users/john/code
+ Prompt: "Add unit tests for the auth module"
+ Turns: 5 │ Tokens: 18,200 in / 4,100 out │ Cost: $0.06
+ Last tool: bash `npm test`
+```
+
+### Session statuses
+
+| Icon | Status | Meaning |
+|------|--------|---------|
+| `▶` | pi -p | Non-interactive session, agent working |
+| `●` | active | Interactive session, agent working |
+| `◉` | waiting | Interactive session, waiting for user input |
+| `✓` | done | Completed successfully |
+| `✗` | failed | Ended with error |
+| `◼` | killed | Process died without clean exit |
+
+### Keybindings
+
+| Key | Action |
+|-----|--------|
+| `↑`/`k` `↓`/`j` | Navigate sessions |
+| `Enter`/`p` | Peek — live scrollable event log |
+| `K` | Kill selected session (SIGTERM) |
+| `f` | Cycle filter: all → interactive → running → finished |
+| `s` | Cycle sort: newest → status → cwd → cost |
+| `/` | Search by prompt, cwd, or session ID |
+| `r` | Force refresh |
+| `?` | Help |
+| `q`/`Esc` | Quit (or exit peek) |
+
+## Install
+
+```bash
+git clone https://github.com/jacrify/pi-dash.git
+cd pi-dash
+npm install
+npm run build
+```
+
+## Usage
+
+```bash
+# Launch the dashboard
+node dist/main.js
+
+# Filter to a specific project
+node dist/main.js --cwd /path/to/project
+
+# Show only running sessions
+node dist/main.js --filter running
+```
+
+## How it works
+
+pi always writes structured JSONL to session files regardless of mode (`-p`, interactive, etc.). pi-dash:
+
+1. **Scans** `~/.pi/agent/sessions/` for all `.jsonl` files
+2. **Correlates** live `pi` processes to session files via `ps` + `lsof` (matching process start times to file creation timestamps)
+3. **Detects interactive vs `-p`** by checking if the process's stdin is a TTY
+4. **Determines activity** using the last assistant message's `stopReason` — `"stop"` or `"aborted"` means waiting for user input, anything else means the agent is working
+5. **Tails** active session files for real-time updates
+
+See [HEURISTICS.md](HEURISTICS.md) for the full process-correlation and status-detection logic.
+
+## Requirements
+
+- macOS or Linux
+- Node.js 18+
+- [pi](https://github.com/mariozechner/pi) coding agent
+
+## License
+
+MIT
