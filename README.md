@@ -95,7 +95,7 @@ pi always writes structured JSONL to session files regardless of mode (`-p`, int
 
 ### Subagent support
 
-pi-dash detects subagent processes spawned by the [pi-subagents](https://github.com/nicobailon/pi-subagents) extension. Subagents run with `--no-session` so they don't create session files — pi-dash discovers them by finding unmatched `pi` processes whose parent is a tracked session. For each subagent it shows:
+pi-dash detects subagent processes spawned by pi's built-in [subagent extension](https://github.com/badlogic/pi-mono/tree/main/examples/extensions/subagent). Subagents run with `--no-session` so they don't create session files — pi-dash discovers them by finding unmatched `pi` processes whose parent is a tracked session. For each subagent it shows:
 
 - The agent name and task (extracted from the parent session's toolCall)
 - The currently running child process (e.g. `bash sleep 30`) with elapsed time, detected via `ps` on the subagent's child processes
