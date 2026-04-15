@@ -9,7 +9,9 @@
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
-    "start": "node dist/main.js"
+    "start": "node dist/main.js",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "keywords": [
     "pi",
@@ -28,6 +30,8 @@
     "@sinclair/typebox": "^0.34.49",
     "@types/node": "^25.6.0",
     "@types/react": "^19.2.14",
-    "typescript": "^6.0.2"
+    "ink-testing-library": "^4.0.0",
+    "typescript": "^6.0.2",
+    "vitest": "^4.1.4"
   }
 }
