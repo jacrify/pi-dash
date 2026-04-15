@@ -95,7 +95,9 @@ export class SessionTracker {
             "killed": 5,
             "done": 6,
           };
-          return (order[a.status] ?? 9) - (order[b.status] ?? 9);
+          const diff = (order[a.status] ?? 9) - (order[b.status] ?? 9);
+          if (diff !== 0) return diff;
+          return b.startedAt.getTime() - a.startedAt.getTime();
         }
         case "cwd":
           return a.cwd.localeCompare(b.cwd);

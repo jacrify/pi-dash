@@ -1,13 +1,13 @@
 // Peek view — full-screen scrollable event log for a session
 
-import React from "react";
-import { Box, Text, useStdout } from "ink";
+import React, { useState, useCallback } from "react";
+import { Box, Text, useInput, useStdout } from "ink";
 import type { TrackedSession } from "../types.js";
 
 interface PeekViewProps {
   session: TrackedSession;
-  scrollOffset: number;
-  autoScroll: boolean;
+  onExit: () => void;
+  onKill?: () => void;
 }
 
 interface PeekLine {
@@ -18,17 +18,49 @@ interface PeekLine {
   continued?: boolean; // true for continuation lines of the same entry
 }
 
-export function PeekView({ session, scrollOffset, autoScroll }: PeekViewProps) {
+export function PeekView({ session, onExit, onKill }: PeekViewProps) {
   const { stdout } = useStdout();
   const termHeight = stdout?.rows ?? 24;
   const contentHeight = termHeight - 4; // header + footer
 
-  const lines = session.peekLines.flatMap(line => formatPeekLine(line) ?? []);
+  const [tail, setTail] = useState(true);
+  const [scrollOffset, setScrollOffset] = useState(0);
 
-  // Auto-scroll: show last N lines
-  const effectiveOffset = autoScroll
-    ? Math.max(0, lines.length - contentHeight)
-    : Math.min(scrollOffset, Math.max(0, lines.length - contentHeight));
+  const lines = session.peekLines.flatMap(line => formatPeekLine(line) ?? []);
+  const maxOffset = Math.max(0, lines.length - contentHeight);
+
+  // Tail mode: always show bottom. Otherwise use stored offset (clamped).
+  const effectiveOffset = tail
+    ? maxOffset
+    : Math.min(scrollOffset, maxOffset);
+
+  const leaveTail = useCallback(() => {
+    // Snapshot current visual position before leaving tail
+    setTail(false);
+    setScrollOffset(maxOffset);
+  }, [maxOffset]);
+
+  useInput((input, key) => {
+    if (input === "q" || key.escape) {
+      onExit();
+    } else if (key.upArrow || input === "k") {
+      if (tail) leaveTail();
+      setScrollOffset((prev) => Math.max(0, prev - 1));
+    } else if (key.downArrow || input === "j") {
+      if (tail) return; // already at bottom
+      setScrollOffset((prev) => prev + 1);
+    } else if (input === "G") {
+      setTail(true);
+    } else if (input === "F") {
+      if (tail) {
+        leaveTail();
+      } else {
+        setTail(true);
+      }
+    } else if (input === "K" && onKill) {
+      onKill();
+    }
+  });
 
   const visibleLines = lines.slice(effectiveOffset, effectiveOffset + contentHeight);
 
@@ -50,7 +82,7 @@ export function PeekView({ session, scrollOffset, autoScroll }: PeekViewProps) {
         <Text>—</Text>
         <Text color={statusColor} bold>{session.status}</Text>
         <Text dimColor>({lines.length} entries)</Text>
-        {autoScroll && <Text color="green"> ▼ auto-scroll</Text>}
+        {tail && <Text color="green"> ▼ tail</Text>}
       </Box>
 
       {/* Event log */}
@@ -72,7 +104,7 @@ export function PeekView({ session, scrollOffset, autoScroll }: PeekViewProps) {
         <Text dimColor>[q] back</Text>
         <Text dimColor>[↑↓/jk] scroll</Text>
         <Text dimColor>[G] bottom</Text>
-        <Text dimColor>[F] toggle auto-scroll</Text>
+        <Text dimColor>[F] toggle tail</Text>
         {session.pid && <Text dimColor>[K] kill</Text>}
       </Box>
     </Box>

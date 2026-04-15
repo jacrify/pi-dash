@@ -46,8 +46,7 @@ export function App({ tracker }: AppProps) {
     sort: "newest",
     searchQuery: "",
     view: "list",
-    peekScrollOffset: 0,
-    peekAutoScroll: true,
+
   });
 
   const stateRef = useRef(state);
@@ -115,22 +114,7 @@ export function App({ tracker }: AppProps) {
 
     if (state.view === "help") return;
 
-    if (state.view === "peek") {
-      if (input === "q" || key.escape) {
-        setState((prev) => ({ ...prev, view: "list" }));
-      } else if (key.upArrow || input === "k") {
-        setState((prev) => ({ ...prev, peekScrollOffset: Math.max(0, prev.peekScrollOffset - 1), peekAutoScroll: false }));
-      } else if (key.downArrow || input === "j") {
-        setState((prev) => ({ ...prev, peekScrollOffset: prev.peekScrollOffset + 1, peekAutoScroll: false }));
-      } else if (input === "G") {
-        setState((prev) => ({ ...prev, peekAutoScroll: true }));
-      } else if (input === "F") {
-        setState((prev) => ({ ...prev, peekAutoScroll: !prev.peekAutoScroll }));
-      } else if (input === "K" && selected?.pid) {
-        killProcess(selected.pid, "SIGTERM");
-      }
-      return;
-    }
+    if (state.view === "peek") return; // PeekView handles its own input
 
     // List mode
     if (key.upArrow || input === "k") {
@@ -139,7 +123,7 @@ export function App({ tracker }: AppProps) {
       moveTo(state.selectedIndex + 1);
     } else if (key.return || input === "p") {
       if (selected) {
-        setState((prev) => ({ ...prev, view: "peek", peekScrollOffset: 0, peekAutoScroll: true }));
+        setState((prev) => ({ ...prev, view: "peek" }));
       }
     } else if (input === "K" && selected?.pid) {
       killProcess(selected.pid, "SIGTERM");
@@ -165,7 +149,7 @@ export function App({ tracker }: AppProps) {
   }
 
   if (state.view === "peek" && selected) {
-    return <PeekView session={selected} scrollOffset={state.peekScrollOffset} autoScroll={state.peekAutoScroll} />;
+    return <PeekView session={selected} onExit={() => setState((prev) => ({ ...prev, view: "list" }))} onKill={selected.pid ? () => killProcess(selected.pid!, "SIGTERM") : undefined} />;
   }
 
   // Calculate exact line budget — every line is accounted for

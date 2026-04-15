@@ -109,6 +109,4 @@ export interface AppState {
   sort: SortMode;
   searchQuery: string;
   view: "list" | "peek" | "help";
-  peekScrollOffset: number;
-  peekAutoScroll: boolean;
 }
