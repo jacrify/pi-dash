@@ -61,7 +61,7 @@ export function DetailPane({ session, height }: DetailPaneProps) {
   }
 
   // Line 4: Prompt
-  const promptText = (session.prompt || "(empty)").replace(/\n/g, " ").replace(/\s+/g, " ");
+  const promptText = (session.lastUserMessage || session.prompt || "(empty)").replace(/\n/g, " ").replace(/\s+/g, " ");
   lines.push({ text: ` Prompt: ${promptText}`, dim: true });
 
   // Line 5: Stats

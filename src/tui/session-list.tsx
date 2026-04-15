@@ -78,7 +78,7 @@ export function SessionList({ sessions, selectedIndex, maxHeight }: SessionListP
         const i = scrollTop + vi;
         const isSelected = i === selectedIndex;
         const { icon, color, label } = STATUS_DISPLAY[session.status];
-        const rawName = (session.name ?? session.prompt ?? "(no prompt)").replace(/\n/g, " ").replace(/\s+/g, " ");
+        const rawName = (session.name ?? session.lastUserMessage ?? session.prompt ?? "(no prompt)").replace(/\n/g, " ").replace(/\s+/g, " ");
         const displayName = rawName.slice(0, promptCols);
         const cwdShort = shortenCwd(session.cwd).slice(0, cwdWidth);
         const duration = formatDuration(session);

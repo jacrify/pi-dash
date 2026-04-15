@@ -39,6 +39,7 @@ export interface TrackedSession {
   // Display
   name: string | null;
   prompt: string;
+  lastUserMessage: string | null;
 
   // Status
   status: SessionStatus;

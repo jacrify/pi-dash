@@ -38,6 +38,7 @@ export function parseSessionFile(filePath: string): TrackedSession | null {
     cwd: header.cwd ?? "",
     name: null,
     prompt: "",
+    lastUserMessage: null,
     status: "unknown",
     pid: null,
     interactive: null,
@@ -113,15 +114,21 @@ export function processEntry(session: TrackedSession, entry: SessionEntry): void
       if (msg.role === "user") {
         session.userMessageCount++;
         session.lastAssistantStopReason = null;
-        if (!session.prompt) {
-          if (typeof msg.content === "string") {
-            session.prompt = msg.content.slice(0, 200);
-          } else if (Array.isArray(msg.content)) {
-            const textBlock = msg.content.find((c: any) => c.type === "text");
-            if (textBlock) {
-              session.prompt = textBlock.text.slice(0, 200);
-            }
+        // Extract user message text
+        let userText: string | null = null;
+        if (typeof msg.content === "string") {
+          userText = msg.content.slice(0, 200);
+        } else if (Array.isArray(msg.content)) {
+          const textBlock = msg.content.find((c: any) => c.type === "text");
+          if (textBlock) {
+            userText = textBlock.text.slice(0, 200);
           }
+        }
+        if (userText) {
+          if (!session.prompt) {
+            session.prompt = userText;
+          }
+          session.lastUserMessage = userText;
         }
       }
 
